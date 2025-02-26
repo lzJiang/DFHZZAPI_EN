@@ -35,7 +35,46 @@ ENDCLASS.
 
 
 
-CLASS zzcl_rest_api_bpm IMPLEMENTATION.
+CLASS ZZCL_REST_API_BPM IMPLEMENTATION.
+
+
+  METHOD gettoken.
+    TYPES:BEGIN OF ty_value,
+            value TYPE string,
+          END OF ty_value.
+    DATA:lt_value       TYPE TABLE OF ty_value,
+         lv_ts          TYPE string,
+         lv_useraccount TYPE string,
+         lv_appid       TYPE string,
+         lv_appkey      TYPE string,
+         lv_collect     TYPE string,
+         lv_str         TYPE string,
+         lv_token       TYPE string.
+
+    lv_appid = me->zzif_rest_api~ms_conf-zzuser.
+    lv_appkey = me->zzif_rest_api~ms_conf-zzpwd.
+
+    lt_value = VALUE #( ( value = iv_ts )
+                        ( value = iv_user )
+                        ( value = lv_appid )
+                        ( value = lv_appkey ) ).
+    SORT lt_value BY value.
+    LOOP AT lt_value INTO DATA(ls_value).
+      IF lv_collect IS INITIAL.
+        lv_collect = ls_value-value.
+      ELSE.
+        lv_collect = |{ lv_collect },{ ls_value-value }|.
+      ENDIF.
+    ENDLOOP.
+
+    DATA(lr_algorithm) = xco_cp_hash=>algorithm.
+    " Upon execution, LV_HASH_VALUE will have the value C79C561BB2CC3D0430A54B3D014C89C3089FE089.
+    DATA(lv_xstring) = xco_cp=>string( lv_collect
+      )->as_xstring( lr_algorithm->for( 'MD5' )
+      )->value.
+    lv_str = lv_xstring.
+    rv_token = to_lower( lv_str ).
+  ENDMETHOD.
 
 
   METHOD outbound_no_log_set.
@@ -130,43 +169,4 @@ CLASS zzcl_rest_api_bpm IMPLEMENTATION.
     cv_msgty = lv_msgty.
     cv_msgtx = ls_resp-errorcode.
   ENDMETHOD.
-
-  METHOD gettoken.
-    TYPES:BEGIN OF ty_value,
-            value TYPE string,
-          END OF ty_value.
-    DATA:lt_value       TYPE TABLE OF ty_value,
-         lv_ts          TYPE string,
-         lv_useraccount TYPE string,
-         lv_appid       TYPE string,
-         lv_appkey      TYPE string,
-         lv_collect     TYPE string,
-         lv_str         TYPE string,
-         lv_token       TYPE string.
-
-    lv_appid = me->zzif_rest_api~ms_conf-zzuser.
-    lv_appkey = me->zzif_rest_api~ms_conf-zzpwd.
-
-    lt_value = VALUE #( ( value = iv_ts )
-                        ( value = iv_user )
-                        ( value = lv_appid )
-                        ( value = lv_appkey ) ).
-    SORT lt_value BY value.
-    LOOP AT lt_value INTO DATA(ls_value).
-      IF lv_collect IS INITIAL.
-        lv_collect = ls_value-value.
-      ELSE.
-        lv_collect = |{ lv_collect },{ ls_value-value }|.
-      ENDIF.
-    ENDLOOP.
-
-    DATA(lr_algorithm) = xco_cp_hash=>algorithm.
-    " Upon execution, LV_HASH_VALUE will have the value C79C561BB2CC3D0430A54B3D014C89C3089FE089.
-    DATA(lv_xstring) = xco_cp=>string( lv_collect
-      )->as_xstring( lr_algorithm->for( 'MD5' )
-      )->value.
-    lv_str = lv_xstring.
-    rv_token = to_lower( lv_str ).
-  ENDMETHOD.
-
 ENDCLASS.

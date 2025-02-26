@@ -31,104 +31,8 @@ ENDCLASS.
 
 
 
-CLASS zzcl_rest_api_edi IMPLEMENTATION.
+CLASS ZZCL_REST_API_EDI IMPLEMENTATION.
 
-  METHOD zzif_rest_api~restrans.
-    TYPES:BEGIN OF ty_resp,
-            message      TYPE string,
-            errorcode    TYPE string,
-            key          TYPE string,
-            srcobject    TYPE string,
-            success      TYPE xfeld,
-            errormessage TYPE string,
-          END OF ty_resp.
-    DATA:ls_resp TYPE ty_resp.
-    DATA:lv_msgty TYPE msgty.
-    TRY .
-        "解析UUID和接口编号
-        /ui2/cl_json=>deserialize( EXPORTING json        = iv_json
-                                             pretty_name = /ui2/cl_json=>pretty_mode-camel_case
-                                   CHANGING  data        = ls_resp ).
-      CATCH cx_root INTO DATA(lr_root).
-        IF 1 = 1 .
-        ENDIF.
-    ENDTRY.
-
-    IF ls_resp-errorcode  = '0000' OR ls_resp-success = 'X'.
-      lv_msgty = 'S'.
-    ELSE.
-      lv_msgty = 'E'.
-    ENDIF.
-
-    cv_msgty = cs_log-msgty = lv_msgty.
-    cv_msgtx = ls_resp-message && ls_resp-errormessage.
-    cs_log-rdate    = sy-datum.
-    cs_log-rtime    = sy-uzeit.
-    GET TIME STAMP FIELD cs_log-rtstmpl.
-    me->zzif_rest_api~set_log( is_log = cs_log ).
-
-  ENDMETHOD.
-
-  METHOD token.
-    TYPES:BEGIN OF ty_req,
-            usernameoremailaddress TYPE string,
-            password               TYPE string,
-          END OF ty_req,
-          BEGIN OF ty_token,
-            accesstoken TYPE  string,
-          END OF ty_token,
-          BEGIN OF ty_resp,
-            result TYPE ty_token,
-          END OF ty_resp.
-    DATA:ls_req  TYPE ty_req,
-         ls_resp TYPE ty_resp.
-    DATA:lt_mapping TYPE /ui2/cl_json=>name_mappings.
-    DATA:lv_json TYPE string.
-
-    lt_mapping = VALUE #(
-                   ( abap = 'UserNameOrEmailAddress'     json = 'UserNameOrEmailAddress' )
-                   ( abap = 'Password'                   json = 'Password'               )
-       ).
-    TRY.
-        DATA(lr_client) = cl_web_http_client_manager=>create_by_http_destination(
-                          i_destination = cl_http_destination_provider=>create_by_url( i_url = CONV string( me->zzif_rest_api~ms_conf-zztkurl ) ) ).
-
-        DATA(lo_request) = lr_client->get_http_request(   ).
-        "设置请求内容格式
-        lo_request->set_header_field( i_name =  'Content-type'
-                                      i_value = 'application/json' ).
-        "设置请求内容
-        ls_req-usernameoremailaddress = me->zzif_rest_api~ms_conf-zzuser.
-        ls_req-password = me->zzif_rest_api~ms_conf-zzpwd.
-
-        "传入数据转JSON
-        lv_json = /ui2/cl_json=>serialize(
-              data          = ls_req
-              compress      = abap_true
-              name_mappings = lt_mapping ).
-
-        lo_request->set_text( lv_json ).
-
-        "设置请求方式
-        DATA(lo_response) = lr_client->execute( if_web_http_client=>post ).
-
-        "返回HTTP JSON报文
-        DATA(status) = lo_response->get_status( ).
-        IF status-code = '200'.
-          DATA(lv_res) = lo_response->get_text( ).
-          /ui2/cl_json=>deserialize( EXPORTING json = lv_res CHANGING data = ls_resp ).
-          rv_token = ls_resp-result-accesstoken.
-        ENDIF.
-
-        "关闭连接
-        CALL METHOD lr_client->close.
-
-      CATCH cx_web_http_client_error cx_http_dest_provider_error.
-        IF 1 = 1 .
-        ENDIF.
-    ENDTRY.
-
-  ENDMETHOD.
 
   METHOD outbound_no_log_set.
     DATA:lr_client TYPE REF TO if_web_http_client.
@@ -229,11 +133,16 @@ CLASS zzcl_rest_api_edi IMPLEMENTATION.
               ).
         "关闭连接
         CALL METHOD lr_client->close.
-      CATCH cx_web_http_client_error cx_http_dest_provider_error.
+      CATCH cx_web_http_client_error into data(err).
         IF 1 = 1 .
         ENDIF.
+        data(lv_msg) = err->get_longtext( ).
+      CATCH cx_http_dest_provider_error into data(err1).
+        lv_msg = err1->get_longtext( ).
     ENDTRY.
   ENDMETHOD.
+
+
   METHOD reqtrans_no_log_set.
     TYPES:BEGIN OF ty_resp,
             message   TYPE string,
@@ -266,4 +175,105 @@ CLASS zzcl_rest_api_edi IMPLEMENTATION.
     GET TIME STAMP FIELD cs_log-rtstmpl.
   ENDMETHOD.
 
+
+  METHOD token.
+    TYPES:BEGIN OF ty_req,
+            usernameoremailaddress TYPE string,
+            password               TYPE string,
+          END OF ty_req,
+          BEGIN OF ty_token,
+            accesstoken TYPE  string,
+          END OF ty_token,
+          BEGIN OF ty_resp,
+            result TYPE ty_token,
+          END OF ty_resp.
+    DATA:ls_req  TYPE ty_req,
+         ls_resp TYPE ty_resp.
+    DATA:lt_mapping TYPE /ui2/cl_json=>name_mappings.
+    DATA:lv_json TYPE string.
+
+    lt_mapping = VALUE #(
+                   ( abap = 'UserNameOrEmailAddress'     json = 'UserNameOrEmailAddress' )
+                   ( abap = 'Password'                   json = 'Password'               )
+       ).
+    TRY.
+        DATA(lr_client) = cl_web_http_client_manager=>create_by_http_destination(
+                          i_destination = cl_http_destination_provider=>create_by_url( i_url = CONV string( me->zzif_rest_api~ms_conf-zztkurl ) ) ).
+
+        DATA(lo_request) = lr_client->get_http_request(   ).
+        "设置请求内容格式
+        lo_request->set_header_field( i_name =  'Content-type'
+                                      i_value = 'application/json' ).
+        "设置请求内容
+        ls_req-usernameoremailaddress = me->zzif_rest_api~ms_conf-zzuser.
+        ls_req-password = me->zzif_rest_api~ms_conf-zzpwd.
+
+        "传入数据转JSON
+        lv_json = /ui2/cl_json=>serialize(
+              data          = ls_req
+              compress      = abap_true
+              name_mappings = lt_mapping ).
+
+        lo_request->set_text( lv_json ).
+
+        "设置请求方式
+        DATA(lo_response) = lr_client->execute( if_web_http_client=>post ).
+
+        "返回HTTP JSON报文
+        DATA(status) = lo_response->get_status( ).
+        IF status-code = '200'.
+          DATA(lv_res) = lo_response->get_text( ).
+          /ui2/cl_json=>deserialize( EXPORTING json = lv_res CHANGING data = ls_resp ).
+          rv_token = ls_resp-result-accesstoken.
+        ENDIF.
+
+        "关闭连接
+        CALL METHOD lr_client->close.
+
+      CATCH cx_web_http_client_error into data(err).
+        IF 1 = 1 .
+        ENDIF.
+        data(lv_msg) = err->get_longtext( ).
+      CATCH cx_http_dest_provider_error into data(err1).
+        lv_msg = err1->get_longtext( ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD zzif_rest_api~restrans.
+    TYPES:BEGIN OF ty_resp,
+            message      TYPE string,
+            errorcode    TYPE string,
+            key          TYPE string,
+            srcobject    TYPE string,
+            success      TYPE xfeld,
+            errormessage TYPE string,
+          END OF ty_resp.
+    DATA:ls_resp TYPE ty_resp.
+    DATA:lv_msgty TYPE msgty.
+    TRY .
+        "解析UUID和接口编号
+        /ui2/cl_json=>deserialize( EXPORTING json        = iv_json
+                                             pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+                                   CHANGING  data        = ls_resp ).
+      CATCH cx_root INTO DATA(lr_root).
+        IF 1 = 1 .
+        ENDIF.
+    ENDTRY.
+
+    IF ls_resp-errorcode  = '0000' OR ls_resp-success = 'X'.
+      lv_msgty = 'S'.
+    ELSE.
+      lv_msgty = 'E'.
+    ENDIF.
+
+    cv_msgty = cs_log-msgty = lv_msgty.
+    cv_msgtx = ls_resp-message && ls_resp-errormessage.
+    cs_log-rdate    = sy-datum.
+    cs_log-rtime    = sy-uzeit.
+    GET TIME STAMP FIELD cs_log-rtstmpl.
+    me->zzif_rest_api~set_log( is_log = cs_log ).
+
+  ENDMETHOD.
 ENDCLASS.
